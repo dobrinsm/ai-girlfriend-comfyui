@@ -31,9 +31,9 @@ This is where all your models will be stored permanently.
 3. Select **"GPU"** tab
 4. Choose **"RTX 4090"** (or RTX 3090 if 4090 unavailable)
 5. Configure Template:
-   - Click **"Custom Template"**
-   - **Container Image**: `pytorch/pytorch:2.5.1-cuda12.1-cudnn8-runtime`
-   - Or use: `runpod/pytorch:2.5.1-py3.11-cuda12.1-devel-ubuntu22.04`
+   - Click **"Edit Template"** (or **"Custom Template"**)
+   - **Container Image**: `runpod/pytorch:1.0.3-cu1290-torch290-ubuntu2204`
+   - *(This is the latest official RunPod PyTorch image with CUDA 12.9 + PyTorch 2.9.0)*
 
 6. **Environment Variables** (click "Add Environment Variable"):
    ```
@@ -47,10 +47,10 @@ This is where all your models will be stored permanently.
    - Under "Network Volume", select your `ai-girlfriend-models` volume
    - **Container Mount Path**: `/runpod-volume`
 
-8. **Ports**:
-   - Add port `8188` (ComfyUI)
-   - Add port `8000` (Backend API)
-   - Add port `22` (SSH)
+8. **Expose HTTP Ports** (in the "Expose HTTP Ports (Max 10)" field):
+   - Add `8188` (ComfyUI)
+   - Add `8000` (Backend API)
+   - SSH (port 22) is available by default via the RunPod console "Connect" button — no need to add it manually
 
 9. Click **"Deploy"**
 
@@ -79,10 +79,10 @@ runpodctl create volume \
 runpodctl create pod \
   --name ai-girlfriend \
   --gpuType "NVIDIA RTX 4090" \
-  --imageName "pytorch/pytorch:2.5.1-cuda12.1-cudnn8-runtime" \
+  --imageName "runpod/pytorch:1.0.3-cu1290-torch290-ubuntu2204" \
   --volumeSize 100 \
   --containerDiskSize 50 \
-  --ports "8188:8188,8000:8000,22:22" \
+  --ports "8188/http,8000/http" \
   --env "DOWNLOAD_MODELS=true" \
   --env "WAVESPEED_CACHE=true"
 ```
@@ -245,34 +245,35 @@ ollama serve
 
 ## Step 5: Access Your Services
 
-Once everything is running:
+Once everything is running, RunPod exposes services via its **HTTP proxy** — not direct IP:port.
 
 | Service | URL | Access |
 |---------|-----|--------|
-| ComfyUI | `http://<pod-ip>:8188` | Open in browser |
-| Backend API | `http://<pod-ip>:8000` | API endpoint |
-| API Docs | `http://<pod-ip>:8000/docs` | Swagger UI |
+| ComfyUI | `https://<pod-id>-8188.proxy.runpod.net` | Open in browser |
+| Backend API | `https://<pod-id>-8000.proxy.runpod.net` | API endpoint |
+| API Docs | `https://<pod-id>-8000.proxy.runpod.net/docs` | Swagger UI |
 
-**Find your pod IP:**
+**Find your Pod ID and proxy links:**
 - In RunPod console, click on your pod
-- Look for "Public IP" or use the "Connect" button
+- Click **"Connect"** → the proxy URLs are listed under **"HTTP Service"**
+- Your Pod ID is the alphanumeric string shown in the pod details (e.g. `abc123xyz`)
 
 ## Step 6: Test the System
 
-From your local machine:
+From your local machine (replace `<pod-id>` with your actual RunPod Pod ID):
 
 ```bash
 # Test health
-curl http://<pod-ip>:8000/health
+curl https://<pod-id>-8000.proxy.runpod.net/health
 
 # Generate avatar
-curl -X POST "http://<pod-ip>:8000/api/v1/generate/avatar" \
+curl -X POST "https://<pod-id>-8000.proxy.runpod.net/api/v1/generate/avatar" \
   -F "prompt=beautiful female avatar, friendly smile" \
   -F "user_id=test_user"
 
 # Or use the helper script
 python scripts/queue_generation.py \
-  --api-url http://<pod-ip>:8000 \
+  --api-url https://<pod-id>-8000.proxy.runpod.net \
   --type chat \
   --text "Hello! How are you?"
 ```
@@ -304,8 +305,10 @@ python main.py &
 ollama serve &
 
 echo "All services started!"
-echo "ComfyUI: http://localhost:8188"
-echo "Backend: http://localhost:8000"
+echo "ComfyUI (local): http://localhost:8188"
+echo "ComfyUI (proxy): https://<pod-id>-8188.proxy.runpod.net"
+echo "Backend (local): http://localhost:8000"
+echo "Backend (proxy): https://<pod-id>-8000.proxy.runpod.net"
 
 # Keep script running
 tail -f /dev/null
@@ -352,8 +355,9 @@ Models in `/runpod-volume/models/` are persisted. Always store models there, not
 - Re-run download script
 
 ### Can't Connect to Services
-- Check firewall rules in RunPod
-- Verify ports are exposed: `netstat -tlnp`
+- Verify HTTP ports `8188` and `8000` are listed in the **"Expose HTTP Ports"** field of your pod template
+- Access via proxy URL: `https://<pod-id>-8188.proxy.runpod.net` (not direct IP:port)
+- Verify ports are listening inside the pod: `netstat -tlnp`
 - Check service logs for errors
 
 ## Next Steps
