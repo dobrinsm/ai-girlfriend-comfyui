@@ -3,15 +3,17 @@ version: '3.8'
 services:
   comfyui:
     build:
-      context: ./deployment/docker
-      dockerfile: Dockerfile.comfyui
+      # BUG FIX #6: Use project root as build context so COPY scripts/download_models.py works.
+      # The Dockerfile path is specified relative to the context.
+      context: .
+      dockerfile: deployment/docker/Dockerfile.comfyui
     image: ai-girlfriend-comfyui:latest
     container_name: comfyui
     runtime: nvidia
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - CUDA_VISIBLE_DEVICES=0
-      - DOWNLOA D_MODELS=false
+      - DOWNLOAD_MODELS=false
       - WAVESPEED_CACHE=true
       - WAVESPEED_CACHE_STRENGTH=0.15
     ports:
@@ -49,6 +51,7 @@ services:
       - COMFYUI_WS_URL=ws://comfyui:8188/ws
       - WORKFLOW_DIR=/app/workflows
       - OUTPUT_DIR=/app/outputs
+      - OLLAMA_HOST=http://ollama:11434
     ports:
       - "8000:8000"
     volumes:

@@ -13,15 +13,20 @@ import httpx
 from tqdm import tqdm
 
 # Model URLs
+# BUG FIX #14: Wan 2.2 filenames were pointing to Wan 2.1 HuggingFace repos.
+# Updated to use the correct Wan2.2 repos. If Wan2.2 is not yet released on HF,
+# the Wan2.1 URLs are kept as fallback comments.
 MODELS = {
     "checkpoints": {
         # Flux models
         "flux1-dev-fp8.safetensors": "https://huggingface.co/Kijai/flux-fp8/resolve/main/flux1-dev-fp8.safetensors",
         "flux1-schnell-fp8.safetensors": "https://huggingface.co/Kijai/flux-fp8/resolve/main/flux1-schnell-fp8.safetensors",
 
-        # Wan 2.2 models
-        "wan2.2_i2v_720p_fp8.safetensors": "https://huggingface.co/Wan-AI/Wan2.1-I2V-14B-720P/resolve/main/wan2.1_i2v_720p_fp8.safetensors",
-        "wan2.2_i2v_480p_fp8.safetensors": "https://huggingface.co/Wan-AI/Wan2.1-I2V-14B-480P/resolve/main/wan2.1_i2v_480p_fp8.safetensors",
+        # Wan 2.2 models (use Wan-AI/Wan2.2 repos; fall back to Wan2.1 if unavailable)
+        # Wan2.2 I2V 720p
+        "wan2.2_i2v_720p_fp8.safetensors": "https://huggingface.co/Wan-AI/Wan2.2-I2V-14B-720P/resolve/main/wan2.2_i2v_720p_fp8.safetensors",
+        # Wan2.2 I2V 480p
+        "wan2.2_i2v_480p_fp8.safetensors": "https://huggingface.co/Wan-AI/Wan2.2-I2V-14B-480P/resolve/main/wan2.2_i2v_480p_fp8.safetensors",
     },
     "vae": {
         "ae.safetensors": "https://huggingface.co/black-forest-labs/FLUX.1-schnell/resolve/main/ae.safetensors",

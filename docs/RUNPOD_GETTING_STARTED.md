@@ -38,7 +38,7 @@ This is where all your models will be stored permanently.
 6. **Environment Variables** (click "Add Environment Variable"):
    ```
    PYTHONUNBUFFERED=1
-   DOWNLOA D_MODELS=true
+   DOWNLOAD_MODELS=true
    WAVESPEED_CACHE=true
    WAVESPEED_CACHE_STRENGTH=0.15
    ```
@@ -59,8 +59,12 @@ This is where all your models will be stored permanently.
 ### Option B: Using RunPod CLI (Advanced)
 
 ```bash
-# Install runpodctl
-pip install runpodctl
+# Install runpodctl (Go binary - NOT a pip package)
+# Linux/macOS:
+wget -qO /usr/local/bin/runpodctl https://github.com/runpod/runpodctl/releases/latest/download/runpodctl-linux-amd64
+chmod +x /usr/local/bin/runpodctl
+# Or via Homebrew on macOS:
+# brew install runpod/runpodctl/runpodctl
 
 # Login
 runpodctl config --apiKey YOUR_API_KEY

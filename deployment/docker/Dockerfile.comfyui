@@ -105,9 +105,14 @@ done
 WORKDIR /workspace/ComfyUI
 RUN mkdir -p models/{checkpoints,clip,controlnet,diffusers,embeddings,loras,upscale_models,vae,vae_approx,ipadapter,sadtalker}
 
-# Download model fetch script
-COPY scripts/download_models.py /workspace/ComfyUI/scripts/
-COPY scripts/entrypoint.sh /workspace/ComfyUI/
+# Copy project scripts (build context is deployment/docker, so use relative paths)
+# The entrypoint.sh lives alongside this Dockerfile
+COPY entrypoint.sh /workspace/ComfyUI/entrypoint.sh
+
+# The download_models.py is in the project root scripts/ directory.
+# Build with: docker build -f deployment/docker/Dockerfile.comfyui -t ... .
+# from the project root so the context includes scripts/
+COPY scripts/download_models.py /workspace/ComfyUI/scripts/download_models.py
 
 # Make entrypoint executable
 RUN chmod +x /workspace/ComfyUI/entrypoint.sh

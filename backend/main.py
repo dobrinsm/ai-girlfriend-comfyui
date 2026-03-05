@@ -39,6 +39,30 @@ vlm_processor: Optional[VLMProcessor] = None
 tts_processor: Optional[TTSProcessor] = None
 
 
+async def _connect_comfyui_with_retry(
+    comfy_client: ComfyUIClient,
+    max_attempts: int = 10,
+    base_delay: float = 3.0
+):
+    """
+    Enhancement: Retry ComfyUI connection on startup so the backend doesn't
+    crash if ComfyUI takes a moment to become ready (common in Docker Compose).
+    """
+    for attempt in range(1, max_attempts + 1):
+        try:
+            await comfy_client.connect()
+            return
+        except Exception as e:
+            delay = base_delay * attempt
+            logger.warning(
+                f"ComfyUI not ready (attempt {attempt}/{max_attempts}): {e}. "
+                f"Retrying in {delay:.0f}s..."
+            )
+            if attempt == max_attempts:
+                raise
+            await asyncio.sleep(delay)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator:
     """Application lifespan manager"""
@@ -57,7 +81,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
             base_url=settings.comfyui_url,
             websocket_url=settings.comfyui_ws_url
         )
-        await comfy_client.connect()
+        # Enhancement: graceful retry instead of hard crash on startup
+        await _connect_comfyui_with_retry(comfy_client)
         logger.info(f"Connected to ComfyUI at {settings.comfyui_url}")
 
         vlm_processor = VLMProcessor(model_name=settings.vlm_model)
@@ -74,7 +99,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
             memory_manager=memory_manager,
             vlm_processor=vlm_processor,
             tts_processor=tts_processor,
-            workflow_dir=settings.workflow_dir
+            workflow_dir=settings.workflow_dir,
+            # BUG FIX #8: Pass llm_model from settings
+            llm_model=settings.llm_model
         )
         logger.info("Pipeline manager initialized")
 

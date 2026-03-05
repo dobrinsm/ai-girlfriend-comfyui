@@ -13,11 +13,22 @@ from PIL import Image
 logger = logging.getLogger(__name__)
 
 
+# BUG FIX #7: Map short model names to correct HuggingFace repo IDs.
+# The .env uses "qwen2-vl-7b" but the actual HF repo is "Qwen/Qwen2-VL-7B-Instruct".
+_MODEL_ID_MAP = {
+    "qwen2-vl-7b": "Qwen/Qwen2-VL-7B-Instruct",
+    "qwen2-vl-2b": "Qwen/Qwen2-VL-2B-Instruct",
+    "qwen2-vl-72b": "Qwen/Qwen2-VL-72B-Instruct",
+}
+
+
 class VLMProcessor:
     """Processes images using Qwen2-VL or similar VLM"""
 
     def __init__(self, model_name: str = "qwen2-vl-7b"):
         self.model_name = model_name
+        # Resolve short name to full HuggingFace repo ID
+        self.model_id = _MODEL_ID_MAP.get(model_name, model_name)
         self._model = None
         self._processor = None
 
@@ -28,14 +39,14 @@ class VLMProcessor:
                 from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
                 import torch
 
-                logger.info(f"Loading VLM model: {self.model_name}")
+                logger.info(f"Loading VLM model: {self.model_id}")
 
                 self._processor = AutoProcessor.from_pretrained(
-                    f"Qwen/{self.model_name}",
+                    self.model_id,
                     trust_remote_code=True
                 )
                 self._model = Qwen2VLForConditionalGeneration.from_pretrained(
-                    f"Qwen/{self.model_name}",
+                    self.model_id,
                     torch_dtype=torch.float16,
                     device_map="auto",
                     trust_remote_code=True

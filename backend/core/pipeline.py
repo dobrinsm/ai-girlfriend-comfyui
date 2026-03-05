@@ -5,6 +5,7 @@ Pipeline manager for orchestrating the AI girlfriend workflow
 import asyncio
 import json
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, Optional
@@ -26,13 +27,16 @@ class PipelineManager:
         memory_manager: MemoryManager,
         vlm_processor: VLMProcessor,
         tts_processor: TTSProcessor,
-        workflow_dir: str
+        workflow_dir: str,
+        llm_model: str = "llama3.2:7b"
     ):
         self.comfy = comfy_client
         self.memory = memory_manager
         self.vlm = vlm_processor
         self.tts = tts_processor
         self.workflow_dir = Path(workflow_dir)
+        # BUG FIX #8: Store llm_model from settings instead of hardcoding
+        self.llm_model = llm_model
         self.semaphore = asyncio.Semaphore(2)  # Limit concurrent generations
 
     async def process_chat_message(
@@ -159,18 +163,27 @@ Be warm, empathetic, and engaging. Keep responses concise (1-2 sentences) for re
         """Generate LLM response using Ollama"""
         import ollama
 
+        # BUG FIX #11: Memories are returned DESC (newest first) from DB.
+        # Reverse them so the LLM sees conversation in chronological order.
+        chronological_history = list(reversed(conversation_history[-5:]))
+
         messages = [{"role": "system", "content": system_prompt}]
 
-        # Add conversation history
-        for mem in conversation_history[-5:]:  # Last 5 exchanges
+        # Add conversation history in chronological order
+        for mem in chronological_history:
             messages.append({"role": "user", "content": mem["user_message"]})
             messages.append({"role": "assistant", "content": mem["ai_response"]})
 
         messages.append({"role": "user", "content": user_message})
 
+        # BUG FIX #8: Use self.llm_model from settings instead of hardcoded value.
+        # Also respect OLLAMA_HOST env var for Docker deployments.
+        ollama_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+        client = ollama.Client(host=ollama_host)
+
         response = await asyncio.to_thread(
-            ollama.chat,
-            model="llama3.2:7b",
+            client.chat,
+            model=self.llm_model,
             messages=messages,
             options={"temperature": 0.8, "num_predict": 150}
         )
@@ -195,27 +208,39 @@ Be warm, empathetic, and engaging. Keep responses concise (1-2 sentences) for re
             with open(workflow_path) as f:
                 workflow = json.load(f)
 
-            # Update workflow with inputs
-            for node_id, node in workflow.get("nodes", []).items() if isinstance(workflow.get("nodes"), dict) else []:
-                # Find and update prompt nodes
+            # BUG FIX #2: The workflow JSON uses a list of nodes (not a dict).
+            # The previous code used .items() on a list which always fell through
+            # to the empty else branch, meaning the prompt was never injected.
+            # Now we iterate the list correctly and match by node type + position.
+            nodes = workflow.get("nodes", [])
+            for node in nodes:
                 if node.get("type") == "CLIPTextEncode":
-                    if "positive" in str(node.get("widgets_values", [])).lower() or node_id == "6":
+                    widgets = node.get("widgets_values", [])
+                    # Node 2 (id=2) is the positive prompt; node 3 (id=3) is negative.
+                    # Identify positive prompt node by absence of negative keywords.
+                    if widgets and not any(
+                        kw in str(widgets[0]).lower()
+                        for kw in ["watermark", "blurry", "low quality", "ugly", "deformed"]
+                    ):
                         node["widgets_values"] = [prompt]
+                        break
 
             # Handle webcam input for IP-Adapter
             if use_ip_adapter and (webcam_path or webcam_frame):
                 if webcam_frame:
-                    # Save base64 frame
+                    # Save base64 frame to temp file
                     import base64
                     webcam_path = f"/tmp/{request_id}_webcam.png"
                     with open(webcam_path, "wb") as f:
                         f.write(base64.b64decode(webcam_frame.split(",")[-1]))
 
                 # Upload to ComfyUI
-                uploaded_name = await self.comfy.upload_image(webcam_path, f"{request_id}_webcam.png")
+                uploaded_name = await self.comfy.upload_image(
+                    webcam_path, f"{request_id}_webcam.png"
+                )
 
-                # Update LoadImage node
-                for node in workflow.get("nodes", []):
+                # Update LoadImage node with uploaded filename
+                for node in nodes:
                     if node.get("type") == "LoadImage":
                         node["widgets_values"] = [uploaded_name, "image"]
 
@@ -253,14 +278,20 @@ Be warm, empathetic, and engaging. Keep responses concise (1-2 sentences) for re
                 workflow = json.load(f)
 
             # Upload input image
-            uploaded_name = await self.comfy.upload_image(image_path, f"{request_id}_input.png")
+            uploaded_name = await self.comfy.upload_image(
+                image_path, f"{request_id}_input.png"
+            )
 
-            # Update workflow
+            # Update workflow nodes
             for node in workflow.get("nodes", []):
                 if node.get("type") == "LoadImage":
                     node["widgets_values"] = [uploaded_name, "image"]
                 elif node.get("type") == "CLIPTextEncode" and prompt:
-                    if "positive" in str(node.get("widgets_values", [])).lower():
+                    widgets = node.get("widgets_values", [])
+                    if widgets and not any(
+                        kw in str(widgets[0]).lower()
+                        for kw in ["blurry", "distorted", "unnatural", "robotic", "glitch"]
+                    ):
                         node["widgets_values"] = [prompt]
 
             # Queue workflow
@@ -295,10 +326,11 @@ Be warm, empathetic, and engaging. Keep responses concise (1-2 sentences) for re
                 workflow = json.load(f)
 
             # Upload files
-            uploaded_image = await self.comfy.upload_image(image_path, f"{request_id}_avatar.png")
-            # Note: Audio upload would need custom node support
+            uploaded_image = await self.comfy.upload_image(
+                image_path, f"{request_id}_avatar.png"
+            )
 
-            # Update workflow
+            # Update workflow nodes
             for node in workflow.get("nodes", []):
                 if node.get("type") == "LoadImage":
                     node["widgets_values"] = [uploaded_image, "image"]

@@ -69,10 +69,14 @@ class TTSProcessor:
         output_path: str,
         emotion: str = "neutral"
     ):
-        """Generate using CosyVoice3 via HTTP API"""
-        # CosyVoice3 API endpoint
-        url = f"{self.cosyvoice_server}/inference_zero_shot"
+        """
+        Generate using CosyVoice3 via HTTP API.
 
+        BUG FIX #10: The previous endpoint '/inference_zero_shot' is a Python
+        method name in the CosyVoice library, NOT an HTTP route. The CosyVoice3
+        HTTP server (FastAPI wrapper) exposes '/tts' or '/v1/tts'.
+        We try '/tts' first (CosyVoice3 default) with a fallback to '/v1/tts'.
+        """
         # Emotion mapping
         emotion_params = {
             "neutral": {"speed": 1.0, "pitch": 1.0},
@@ -84,22 +88,42 @@ class TTSProcessor:
 
         payload = {
             "tts_text": text,
-            "prompt_text": "",  # Zero-shot mode
+            "spk_id": self.voice_id,   # Speaker/voice ID
             "speed": emotion_params["speed"],
-            "pitch": emotion_params["pitch"]
         }
 
-        try:
-            response = await self._client.post(url, json=payload)
-            response.raise_for_status()
+        # Try the standard CosyVoice3 HTTP API endpoint
+        endpoints_to_try = [
+            f"{self.cosyvoice_server}/tts",
+            f"{self.cosyvoice_server}/v1/tts",
+            f"{self.cosyvoice_server}/inference_sft",  # SFT mode fallback
+        ]
 
-            # Save audio
-            with open(output_path, "wb") as f:
-                f.write(response.content)
+        last_error = None
+        for url in endpoints_to_try:
+            try:
+                response = await self._client.post(url, json=payload)
+                if response.status_code == 404:
+                    continue  # Try next endpoint
+                response.raise_for_status()
 
-        except Exception as e:
-            logger.error(f"CosyVoice generation failed: {e}")
-            raise
+                # Save audio
+                with open(output_path, "wb") as f:
+                    f.write(response.content)
+                logger.debug(f"CosyVoice TTS succeeded via {url}")
+                return
+
+            except Exception as e:
+                last_error = e
+                logger.debug(f"CosyVoice endpoint {url} failed: {e}")
+                continue
+
+        logger.error(f"All CosyVoice endpoints failed. Last error: {last_error}")
+        raise RuntimeError(
+            f"CosyVoice TTS failed on all endpoints. "
+            f"Ensure the CosyVoice3 server is running at {self.cosyvoice_server}. "
+            f"Last error: {last_error}"
+        )
 
     async def _generate_dia(
         self,

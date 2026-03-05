@@ -68,18 +68,31 @@ class MemoryManager:
         self,
         user_id: str,
         limit: int = 10,
-        offset: int = 0
+        offset: int = 0,
+        order: str = "desc"
     ) -> List[Dict]:
-        """Get memories for a user"""
+        """
+        Get memories for a user.
+
+        BUG FIX #11: Added 'order' parameter.
+        - order="desc" (default): newest first — used for API responses / display.
+        - order="asc": chronological order — used when building LLM conversation history.
+
+        Note: pipeline.py reverses the DESC result slice itself, which is equivalent
+        to fetching ASC. Both approaches work; the pipeline reversal is kept for
+        backward compatibility with callers that expect DESC ordering.
+        """
         if not self._db:
             raise RuntimeError("Memory manager not initialized")
 
+        sort_dir = "ASC" if order.lower() == "asc" else "DESC"
+
         cursor = await self._db.execute(
-            """
+            f"""
             SELECT user_message, ai_response, metadata, timestamp
             FROM memories
             WHERE user_id = ?
-            ORDER BY timestamp DESC
+            ORDER BY timestamp {sort_dir}
             LIMIT ? OFFSET ?
             """,
             (user_id, limit, offset)

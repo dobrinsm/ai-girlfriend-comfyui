@@ -132,7 +132,9 @@ fi
 cd "$PROJECT_DIR"
 mkdir -p backend workflows configs scripts
 
-# Create requirements.txt for backend
+# BUG FIX #9: Use the full requirements.txt that matches backend/requirements.txt.
+# The previous version omitted torch, opencv, transformers, qwen-vl-utils etc.
+# which caused VLMProcessor and TTSProcessor imports to fail.
 cat > backend/requirements.txt << 'EOF'
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
@@ -144,9 +146,21 @@ aiofiles==24.1.0
 python-multipart==0.0.17
 pillow==11.0.0
 numpy==1.26.4
+opencv-python==4.10.0.84
 sqlalchemy==2.0.36
 aiosqlite==0.20.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+redis==5.2.0
+celery==5.4.0
 ollama==0.4.2
+qwen-vl-utils==0.0.8
+transformers>=4.45.0
+accelerate>=0.26.0
+torch==2.5.1
+torchvision==0.20.1
+torchaudio==2.5.1
+--extra-index-url https://download.pytorch.org/whl/cu121
 EOF
 
 # Create .env for backend
@@ -159,6 +173,8 @@ COMFYUI_URL=http://localhost:8188
 COMFYUI_WS_URL=ws://localhost:8188/ws
 WORKFLOW_DIR=$PROJECT_DIR/workflows
 OUTPUT_DIR=/runpod-volume/outputs
+# Enhancement: Ollama runs locally on RunPod (not in Docker), so localhost is correct here
+OLLAMA_HOST=http://localhost:11434
 VLM_MODEL=qwen2-vl-7b
 LLM_MODEL=llama3.2:7b
 TTS_MODEL=cosyvoice3
