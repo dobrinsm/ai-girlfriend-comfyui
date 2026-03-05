@@ -1,0 +1,56 @@
+# ComfyUI Configuration for AI Girlfriend
+# Optimized for real-time generation with WaveSpeed
+
+comfyui:
+  # Server settings
+  listen: "0.0.0.0"
+  port: 8188
+  preview_method: "auto"  # TAESD, latent2rgb, or auto
+
+  # Performance settings
+  fp16_unet: true
+  fp16_vae: true
+  fp8_e4m3fn: true
+
+  # Memory management
+  disable_smart_memory: false
+  reserve_vram: 2  # GB to reserve for other processes
+
+  # WaveSpeed settings
+  wavespeed:
+    enabled: true
+    first_block_cache: true
+    cache_strength: 0.15  # 0.0-1.0, higher = faster but lower quality
+
+# Model paths (relative to ComfyUI root)
+models:
+  checkpoints: "models/checkpoints"
+  clip: "models/clip"
+  vae: "models/vae"
+  loras: "models/loras"
+  ipadapter: "models/ipadapter"
+  controlnet: "models/controlnet"
+  upscale_models: "models/upscale_models"
+  embeddings: "models/embeddings"
+  diffusers: "models/diffusers"
+  vae_approx: "models/vae_approx"
+  gligen: "models/gligen"
+  style_models: "models/style_models"
+  hypernetworks: "models/hypernetworks"
+  photomaker: "models/photomaker"
+  classifiers: "models/classifiers"
+  custom_nodes: "custom_nodes"
+
+# Output settings
+output:
+  directory: "output"
+  temp_directory: "temp"
+  save_metadata: true
+  metadata_include_workflow: true
+
+# Security (for production)
+security:
+  enable_cors: true
+  cors_origins:
+    - "*"  # Restrict in production
+  # api_key: "your-api-key-here"  # Uncomment to enable API key auth

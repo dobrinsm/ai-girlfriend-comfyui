@@ -1,0 +1,66 @@
+{
+  "id": "ai-girlfriend-comfyui",
+  "name": "AI Girlfriend - ComfyUI + WaveSpeed",
+  "description": "Real-time AI avatar generation with Flux, Wan 2.2, and WaveSpeed optimizations",
+  "imageName": "ai-girlfriend-comfyui:latest",
+  "dockerArgs": "",
+  "env": [
+    {
+      "key": "DOWNLOAD_MODELS",
+      "value": "false",
+      "description": "Auto-download models on startup"
+    },
+    {
+      "key": "WAVESPEED_CACHE",
+      "value": "true",
+      "description": "Enable WaveSpeed first block cache"
+    },
+    {
+      "key": "WAVESPEED_CACHE_STRENGTH",
+      "value": "0.15",
+      "description": "Cache strength for video generation"
+    },
+    {
+      "key": "COMFYUI_EXTRA_ARGS",
+      "value": "--listen 0.0.0.0 --port 8188 --preview-method auto",
+      "description": "Additional ComfyUI arguments"
+    }
+  ],
+  "ports": [
+    {
+      "port": 8188,
+      "protocol": "http",
+      "description": "ComfyUI Web Interface"
+    },
+    {
+      "port": 8000,
+      "protocol": "http",
+      "description": "FastAPI Backend API"
+    }
+  ],
+  "volumeMounts": [
+    {
+      "mountPath": "/runpod-volume",
+      "name": "persistent-storage"
+    }
+  ],
+  "volumeDisk": {
+    "volumeSize": 100,
+    "volumeMountPath": "/runpod-volume"
+  },
+  "gpuCount": 1,
+  "gpuType": "NVIDIA RTX 4090",
+  "vcpuCount": 8,
+  "memoryInGb": 32,
+  "storage": {
+    "container": {
+      "sizeInGb": 50,
+      "type": "SCRATCH"
+    }
+  },
+  "category": "AI/ML",
+  "startJupyter": false,
+  "startSSH": true,
+  "isServerless": false,
+  "isNetworkVolume": true
+}

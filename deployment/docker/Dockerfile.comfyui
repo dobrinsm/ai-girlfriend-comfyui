@@ -1,0 +1,131 @@
+# ComfyUI + WaveSpeed Docker Image for RunPod
+# Based on nvidia/cuda for GPU support
+
+FROM nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV CUDA_HOME=/usr/local/cuda
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    wget \
+    curl \
+    python3.10 \
+    python3-pip \
+    python3-dev \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    ffmpeg \
+    libsndfile1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set Python 3.10 as default
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1
+RUN update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
+
+# Upgrade pip
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Install PyTorch with CUDA support
+RUN pip install --no-cache-dir \
+    torch==2.5.1 \
+    torchvision==0.20.1 \
+    torchaudio==2.5.1 \
+    --index-url https://download.pytorch.org/whl/cu121
+
+# Install Triton (for WaveSpeed)
+RUN pip install --no-cache-dir triton==3.1.0
+
+# Set working directory
+WORKDIR /workspace
+
+# Clone ComfyUI
+RUN git clone https://github.com/comfyanonymous/ComfyUI.git
+WORKDIR /workspace/ComfyUI
+
+# Install ComfyUI dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install additional dependencies for custom nodes
+RUN pip install --no-cache-dir \
+    accelerate \
+    transformers \
+    diffusers \
+    einops \
+    safetensors \
+    omegaconf \
+    pytorch-lightning \
+    xformers \
+    insightface \
+    onnxruntime-gpu \
+    opencv-python \
+    pillow \
+    scipy \
+    tqdm \
+    aiohttp \
+    aiofiles
+
+# Create custom nodes directory
+RUN mkdir -p custom_nodes
+
+# Install WaveSpeed nodes
+WORKDIR /workspace/ComfyUI/custom_nodes
+RUN git clone https://github.com/chengzeyi/Comfy-WaveSpeed.git
+
+# Install ComfyUI-Manager
+RUN git clone https://github.com/ltdrdata/ComfyUI-Manager.git
+
+# Install ComfyUI-VideoHelperSuite
+RUN git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git
+
+# Install IPAdapter Plus
+RUN git clone https://github.com/cubiq/ComfyUI_IPAdapter_plus.git
+
+# Install SadTalker
+RUN git clone https://github.com/OpenTalker/SadTalker.git
+
+# Install additional custom nodes
+RUN git clone https://github.com/WASasquatch/was-node-suite-comfyui.git
+RUN git clone https://github.com/pythongosssss/ComfyUI-Custom-Scripts.git
+
+# Install dependencies for all custom nodes
+RUN for dir in */; do \
+    if [ -f "$dir/requirements.txt" ]; then \
+        pip install --no-cache-dir -r "$dir/requirements.txt" || true; \
+    fi \
+done
+
+# Create model directories
+WORKDIR /workspace/ComfyUI
+RUN mkdir -p models/{checkpoints,clip,controlnet,diffusers,embeddings,loras,upscale_models,vae,vae_approx,ipadapter,sadtalker}
+
+# Download model fetch script
+COPY scripts/download_models.py /workspace/ComfyUI/scripts/
+COPY scripts/entrypoint.sh /workspace/ComfyUI/
+
+# Make entrypoint executable
+RUN chmod +x /workspace/ComfyUI/entrypoint.sh
+
+# Create output directory
+RUN mkdir -p output input
+
+# Expose ports
+EXPOSE 8188 8000
+
+# Set environment variables for WaveSpeed
+ENV WAVESPEED_CACHE=true
+ENV WAVESPEED_CACHE_STRENGTH=0.15
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8188/system_stats || exit 1
+
+# Entrypoint
+ENTRYPOINT ["/workspace/ComfyUI/entrypoint.sh"]
+CMD ["python", "main.py", "--listen", "0.0.0.0", "--port", "8188"]
