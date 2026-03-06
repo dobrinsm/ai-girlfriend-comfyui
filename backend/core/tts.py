@@ -24,6 +24,7 @@ class TTSProcessor:
     ):
         self.model_name = model_name
         self.voice_id = voice_id
+        # Use port 50000 instead of 50000 to avoid conflict with backend on 8000
         self.cosyvoice_server = cosyvoice_server or "http://localhost:50000"
         self._client = httpx.AsyncClient(timeout=60.0)
 

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Girlfriend - Avatar Chat</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>AI Girlfriend Avatar Chat</h1>
+            <div class="connection-status" id="connectionStatus">
+                <span class="status-dot disconnected"></span>
+                <span class="status-text">Disconnected</span>
+            </div>
+        </header>
+
+        <main class="chat-interface">
+            <!-- Avatar Video Display -->
+            <div class="avatar-section">
+                <div class="avatar-container" id="avatarContainer">
+                    <video id="avatarVideo" class="avatar-video" autoplay loop muted playsinline style="display: none;"></video>
+                    <div id="avatarPlaceholder" class="avatar-placeholder">
+                        <div class="avatar-icon">👩</div>
+                        <p>Your avatar will appear here</p>
+                    </div>
+                    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+                        <div class="spinner"></div>
+                        <p id="loadingText">Generating response...</p>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                    </div>
+                </div>
+                
+
+            </div>
+
+            <!-- Chat Messages -->
+            <div class="chat-messages" id="chatMessages">
+                <div class="message system">
+                    <p>Welcome! Type a message or use voice to chat with your AI avatar.</p>
+                </div>
+            </div>
+
+            <!-- Input Section -->
+            <div class="input-section">
+                <div class="input-container">
+                    <button id="voiceBtn" class="btn-icon" title="Voice Input">🎤</button>
+                    <input 
+                        type="text" 
+                        id="messageInput" 
+                        placeholder="Type your message..." 
+                        autocomplete="off"
+                    >
+                    <button id="sendBtn" class="btn-primary">Send</button>
+                </div>
+                
+                <div class="input-options">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="generateVideo" checked>
+                        Generate video response
+                    </label>
+                    <button id="uploadImageBtn" class="btn-icon" title="Upload Avatar Image">📎</button>
+                    <input type="file" id="imageUpload" accept="image/*" style="display: none;">
+                </div>
+                <div id="imagePreview" class="image-preview" style="display: none;">
+                    <img id="previewImg" src="" alt="Avatar Reference">
+                    <button id="clearImage" class="btn-icon clear-btn" title="Remove image">✕</button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Voice Recording Modal -->
+        <div id="voiceModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="voice-recorder">
+                    <div class="voice-wave" id="voiceWave"></div>
+                    <p>Listening...</p>
+                    <button id="stopRecording" class="btn-secondary">Stop</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

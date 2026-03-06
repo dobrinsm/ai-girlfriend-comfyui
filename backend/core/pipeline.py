@@ -49,19 +49,23 @@ class PipelineManager:
         Process a chat message through the complete pipeline
         Yields progress updates
         """
+        logger.info(f"[PIPELINE] Starting process_chat_message for user_id={user_id}, message={message[:50]}...")
         start_time = time.time()
 
         # Step 1: Analyze webcam frame with VLM (if provided)
         visual_context = ""
         if webcam_frame:
+            logger.info("[PIPELINE] Step 1: Analyzing webcam frame...")
             yield {"type": "status", "message": "Analyzing webcam..."}
             try:
                 visual_context = await self.vlm.analyze_frame(webcam_frame)
+                logger.info(f"[PIPELINE] VLM result: {visual_context}")
                 yield {"type": "vlm_result", "context": visual_context}
             except Exception as e:
-                logger.error(f"VLM analysis failed: {e}")
+                logger.error(f"[PIPELINE] VLM analysis failed: {e}")
 
         # Step 2: Generate LLM response with memory
+        logger.info("[PIPELINE] Step 2: Generating LLM response...")
         yield {"type": "status", "message": "Thinking..."}
 
         conversation_history = await self.memory.get_memories(user_id)

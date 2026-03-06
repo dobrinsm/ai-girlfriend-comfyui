@@ -317,17 +317,21 @@ async def websocket_chat(websocket: WebSocket):
     """
     await websocket.accept()
     user_id = None
+    logger.info("[WS] Client connected to WebSocket")
 
     try:
         while True:
             # Receive message
             data = await websocket.receive_json()
+            logger.info(f"[WS] Received data: {data}")
             message_type = data.get("type", "message")
             user_id = data.get("user_id", "anonymous")
+            logger.info(f"[WS] message_type={message_type}, user_id={user_id}")
 
             if message_type == "chat":
                 user_message = data.get("message", "")
                 webcam_frame = data.get("webcam_frame")  # base64 encoded
+                logger.info(f"[WS] Processing chat message: {user_message[:50]}...")
 
                 # Process through pipeline
                 async for update in pipeline_manager.process_chat_message(
@@ -335,15 +339,16 @@ async def websocket_chat(websocket: WebSocket):
                     message=user_message,
                     webcam_frame=webcam_frame
                 ):
+                    logger.info(f"[WS] Yielding update: {update}")
                     await websocket.send_json(update)
 
             elif message_type == "ping":
                 await websocket.send_json({"type": "pong"})
 
     except WebSocketDisconnect:
-        logger.info(f"Client disconnected: {user_id}")
+        logger.info(f"[WS] Client disconnected: {user_id}")
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+        logger.error(f"[WS] WebSocket error: {e}", exc_info=True)
         await websocket.close(code=1011)
 
 
