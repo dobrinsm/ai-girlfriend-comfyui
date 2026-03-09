@@ -4,6 +4,9 @@
 
 set -e
 
+export PIP_DISABLE_PIP_VERSION_CHECK=1
+export PIP_NO_INPUT=1
+
 echo "=========================================="
 echo "AI Girlfriend - RunPod Setup"
 echo "=========================================="
@@ -97,7 +100,7 @@ else
 fi
 
 cd "$COMFYUI_DIR"
-pip install -q -r requirements.txt
+pip install -q --disable-pip-version-check -r requirements.txt
 
 # Install custom nodes
 echo "  Installing custom nodes..."
@@ -111,7 +114,7 @@ install_node() {
         echo "    - $name"
         git clone --depth 1 "$repo" "$name"
         if [ -f "$name/requirements.txt" ]; then
-            pip install -q -r "$name/requirements.txt" || true
+            pip install -q --disable-pip-version-check -r "$name/requirements.txt" || true
         fi
     fi
 }
@@ -143,7 +146,7 @@ echo ""
 echo -e "${BLUE}Step 6: Installing backend dependencies...${NC}"
 
 cd "$PROJECT_DIR/backend"
-pip install -q -r requirements.txt
+pip install -q --disable-pip-version-check -r requirements.txt
 
 # Create .env file
 cat > "$PROJECT_DIR/backend/.env" << EOF
