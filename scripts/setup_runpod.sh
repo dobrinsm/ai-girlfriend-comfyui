@@ -49,7 +49,7 @@ echo ""
 echo -e "${BLUE}Step 2: Installing system dependencies...${NC}"
 
 apt-get update -qq
-apt-get install -y -qq git wget curl vim libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev
+apt-get install -y -qq git wget curl vim libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev zstd
 
 echo -e "  ${GREEN}✓${NC} System dependencies installed"
 
@@ -242,8 +242,8 @@ if ! is_running "ollama serve"; then
     sleep 5
     
     if ! ollama list | grep -q "llama3.2"; then
-        echo "  Pulling llama3.2:7b (this may take a few minutes)..."
-        ollama pull llama3.2:7b
+        echo "  Pulling llama3.2:7b model (this may take a few minutes)..."
+        ollama pull llama3.2:7b || ollama pull llama3.2 || echo "  Warning: Could not pull llama model"
     fi
 else
     echo -e "  ${YELLOW}Ollama already running${NC}"
