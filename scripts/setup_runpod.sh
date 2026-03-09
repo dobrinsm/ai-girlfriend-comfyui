@@ -242,8 +242,12 @@ if ! is_running "ollama serve"; then
     sleep 5
     
     if ! ollama list | grep -q "llama3.2"; then
-        echo "  Pulling llama3.2:7b model (this may take a few minutes)..."
-        ollama pull llama3.2:7b || ollama pull llama3.2 || echo "  Warning: Could not pull llama model"
+        echo "  Pulling LLM model..."
+        # Try different models in order of preference
+        ollama pull llama3.2:7b 2>/dev/null || \
+        ollama pull llama3.2 2>/dev/null || \
+        ollama pull mistral 2>/dev/null || \
+        echo "  Warning: Could not pull LLM model - will use backend defaults"
     fi
 else
     echo -e "  ${YELLOW}Ollama already running${NC}"
