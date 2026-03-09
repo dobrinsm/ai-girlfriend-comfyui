@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import AsyncGenerator, Optional
 
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
@@ -162,10 +162,10 @@ async def list_models():
 
 @app.post("/api/v1/generate/avatar")
 async def generate_avatar(
-    prompt: str,
+    prompt: str = Form(...),
     webcam_image: Optional[UploadFile] = File(None),
-    user_id: str = "default_user",
-    use_ip_adapter: bool = True
+    user_id: str = Form("default_user"),
+    use_ip_adapter: bool = Form(True)
 ):
     """
     Generate avatar image from prompt with optional webcam input for IP-Adapter
