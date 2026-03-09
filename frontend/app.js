@@ -12,20 +12,22 @@ function getBackendURL() {
         return backendParam.replace(/\/$/, ''); // Remove trailing slash
     }
     // Default: assume backend is on same host but port 8000
+    const protocol = window.location.protocol;
     const host = window.location.hostname;
     // Check if we're on the RunPod proxy
     if (host.includes('.proxy.runpod.net')) {
         // Replace -3000 port with -8000 for backend
-        return host.replace('-3000', '-8000').replace(':3000', ':8000');
+        const port = host.replace('-3000', '-8000').replace(':3000', ':8000');
+        return protocol + '//' + port;
     }
     // Local development
-    return window.location.protocol + '//' + host.replace(':3000', ':8000');
+    return protocol + '//' + host.replace(':3000', ':8000');
 }
 
 const CONFIG = {
     // Use backend URL from query param or auto-detect
     API_URL: getBackendURL(),
-    WS_URL: getBackendURL().replace('http', 'ws') + '/ws/chat',
+    WS_URL: getBackendURL().replace('http://', 'ws://').replace('https://', 'wss://') + '/ws/chat',
     
     USER_ID: 'user_' + Math.random().toString(36).substr(2, 9)
 };
