@@ -1,168 +1,151 @@
 # AI Girlfriend - Real-Time ComfyUI + WaveSpeed System
 
-A high-performance real-time AI avatar generation system using ComfyUI with WaveSpeed optimizations for 24/7 deployment on RunPod.
+A high-performance real-time AI avatar generation system using ComfyUI with WaveSpeed optimizations. Creates AI avatar images, videos with lip-syncing, and voice responses.
 
-## Architecture Overview
+## What It Does
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              CLIENT LAYER                                    │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
-│  │   Webcam    │  │   Chat UI   │  │ Voice Input │  │    OBS/RTMP Out     │ │
-│  │  (OpenCV)   │  │  (React)    │  │  (Whisper)  │  │   (Streaming)       │ │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └─────────────────────┘ │
-└─────────┼────────────────┼────────────────┼──────────────────────────────────┘
-          │                │                │
-          └────────────────┴────────────────┘
-                           │
-┌──────────────────────────▼──────────────────────────────────────────────────┐
-│                           BACKEND LAYER (FastAPI)                            │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
-│  │   Webcam    │  │    LLM      │  │   Prompt    │  │    Queue Manager    │ │
-│  │   Capture   │→ │   (Ollama)  │→ │  Processor  │→ │   (ComfyUI API)     │ │
-│  │  (Qwen VLM) │  │   + RAG     │  │             │  │                     │ │
-│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────────────┘ │
-└──────────────────────────┬──────────────────────────────────────────────────┘
-                           │ WebSocket API
-┌──────────────────────────▼──────────────────────────────────────────────────┐
-│                         COMFYUI LAYER (RunPod GPU)                           │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────────┐ │
-│  │                         IMAGE GENERATION                                │ │
-│  │  Flux 1.1 + IP-Adapter + LoRA → WaveSpeed First Block Cache            │ │
-│  │  Latency: ~2-3s | CFG: 3.5 | Steps: 6-8                                │ │
-│  └───────────────────────────────┬─────────────────────────────────────────┘ │
-│                                  │                                           │
-│  ┌───────────────────────────────▼─────────────────────────────────────────┐ │
-│  │                         VIDEO GENERATION                                │ │
-│  │  Wan 2.2 I2V 720p → WaveSpeed Cache (0.15 strength)                    │ │
-│  │  Latency: ~5-8s | 2-3s clips                                            │ │
-│  └───────────────────────────────┬─────────────────────────────────────────┘ │
-│                                  │                                           │
-│  ┌───────────────────────────────▼─────────────────────────────────────────┐ │
-│  │                      VOICE + LIPSYNC                                    │ │
-│  │  CosyVoice3 TTS → Dia TTS → SadTalker Lip-Sync                         │ │
-│  │  Latency: ~1-2s                                                         │ │
-│  └─────────────────────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────────────────┘
+User Message → LLM (Ollama) → Response + Avatar (Flux) → Video (Wan 2.2) → Lip-Sync (SadTalker) + Voice (CosyVoice)
 ```
 
-## Performance Targets
+| Component | Model | Latency |
+|-----------|-------|---------|
+| Chat Response | Llama 3.2 (Ollama) | <1s |
+| Avatar Image | Flux 1.1 FP8 | ~2-3s |
+| Video Generation | Wan 2.2 I2V | ~5-8s |
+| Voice Synthesis | CosyVoice3 | ~1-2s |
+| Lip Sync | SadTalker | ~1s |
 
-| Component | Target Latency | Technology |
-|-----------|---------------|------------|
-| Chat Response | <1s | Ollama Llama 3.2 + RAG |
-| Avatar Generation | 2-3s | Flux + WaveSpeed |
-| Video Generation | 5-8s | Wan 2.2 I2V + WaveSpeed |
-| Voice Synthesis | 1-2s | CosyVoice3 / Dia |
-| Lip Sync | +1s | SadTalker |
-| **Total Pipeline** | **<5s** | End-to-end |
+## Quick Start (RunPod - No Network Volume Required)
 
-## Speed Optimizations
+### Step 1: Deploy GPU Pod on RunPod
 
-### WaveSpeed First Block Cache
-- **Speedup**: 50-60% faster generation
-- **Usage**: Place before KSampler for Flux/Wan/LTXV
-- **Image Gen**: 60s → 20s
-- **Video Gen**: 15min → 8min
+1. Go to [RunPod Console](https://www.runpod.io/console/pods)
+2. Click **Deploy**
+3. Select the **GPU** tab
+4. Choose **RTX 4090** (or RTX 3090 if unavailable)
+5. Under "Container Image", select **PyTorch** (or enter `runpod/pytorch:2.1.0-cu118-ubuntu22.04`)
+6. Set **Container Disk Size** to **150 GB** (required for models)
+7. In "Expose HTTP Ports", enter: `8188,8000,3000` (comma-separated)
 
-### TC (Tash) Cache Node
-- **Speedup**: 50% across SDXL/Flux
-- **Stackable**: Combine with WaveSpeed for 3x total gains
+### Step 2: Run One-Click Setup
 
-### Recommended Settings
-```yaml
-Flux Generation:
-  cfg: 3.5
-  steps: 6-8 (high stage)
-  loras: false (initially)
+SSH into your pod and run:
 
-Wan 2.2 I2V:
-  cache_strength: 0.15  # Balanced motion/quality
-  resolution: 720p
-  frames: 24-48
+```bash
+curl -fsSL https://raw.githubusercontent.com/dobrinsm/ai-girlfriend-comfyui/main/scripts/setup_runpod.sh | bash
 ```
+
+Or if you already have the repo cloned:
+
+```bash
+cd /workspace
+git clone https://github.com/dobrinsm/ai-girlfriend-comfyui.git
+cd ai-girlfriend-comfyui
+bash scripts/setup_runpod.sh
+```
+
+### Step 3: Access Services
+
+Find your Pod ID in RunPod Console → Connect, then use:
+
+| Service | URL |
+|---------|-----|
+| Frontend | `https://<pod-id>-3000.proxy.runpod.net` |
+| ComfyUI | `https://<pod-id>-8188.proxy.runpod.net` |
+| Backend API | `https://<pod-id>-8000.proxy.runpod.net` |
+| API Docs | `https://<pod-id>-8000.proxy.runpod.net/docs` |
+
+**Note:** The frontend will automatically detect the backend. If it doesn't connect, try:
+`https://<pod-id>-3000.proxy.runpod.net?backend=https://<pod-id>-8000.proxy.runpod.net`
+
+## Hardware Requirements
+
+| Spec | Minimum | Recommended |
+|------|---------|------------|
+| GPU | RTX 3090 (24GB) | RTX 4090 (24GB) |
+| VRAM | 20GB | 24GB |
+| Disk | 100GB | 200GB |
+| RAM | 32GB | 64GB |
+
+## Services Started
+
+The setup script automatically starts:
+
+1. **Frontend** (port 3000) - Web UI
+2. **ComfyUI** (port 8188) - Image/Video generation
+3. **Backend API** (port 8000) - FastAPI orchestration
+4. **Ollama** (port 11434) - LLM for chat
+5. **CosyVoice** (port 50000) - Text-to-Speech
 
 ## Project Structure
 
 ```
 ai-girlfriend-comfyui/
-├── workflows/           # ComfyUI workflow JSONs
-│   ├── image-gen/      # Flux + IP-Adapter workflows
-│   ├── video-gen/      # Wan 2.2 I2V workflows
-│   ├── voice-lipsync/  # SadTalker + TTS workflows
-│   └── full-pipeline/  # End-to-end integrated workflows
-├── backend/            # FastAPI orchestration server
-│   ├── api/           # REST endpoints
-│   ├── core/          # Pipeline logic
-│   └── utils/         # Helpers
-├── deployment/        # Infrastructure configs
-│   ├── docker/        # Container definitions
-│   ├── runpod/        # RunPod templates
-│   └── kubernetes/    # K8s manifests
-├── configs/          # Model configs, prompts
-├── models/           # Download scripts
-├── scripts/          # Setup automation
-└── docs/            # Documentation
+├── backend/              # FastAPI server
+│   ├── main.py         # API entry point
+│   ├── core/           # Pipeline logic
+│   └── requirements.txt
+├── scripts/
+│   ├── setup_runpod.sh  # One-click setup (USE THIS)
+│   └── download_models.py
+├── workflows/           # ComfyUI workflows
+│   ├── image-gen/     # Flux workflows
+│   ├── video-gen/     # Wan 2.2 workflows
+│   └── full-pipeline/
+└── configs/            # Configuration
 ```
 
-## Quick Start
+## Usage
 
-### 1. Clone the Repository
+### Generate Avatar
 
 ```bash
-git clone https://github.com/dobrinsm/ai-girlfriend-comfyui.git
-cd ai-girlfriend-comfyui
+curl -X POST "https://<pod-id>-8000.proxy.runpod.net/api/v1/generate/avatar" \
+  -F "prompt=beautiful female avatar, friendly smile" \
+  -F "user_id=test_user"
 ```
 
-### 2. RunPod Deployment
-
-See the [RunPod Getting Started Guide](docs/RUNPOD_GETTING_STARTED.md) for detailed instructions.
-
-Quick deploy:
-```bash
-# Deploy to RunPod (RTX 4090 recommended)
-cd deployment/runpod
-./deploy.sh
-```
-
-### 3. Local Backend
+### Chat
 
 ```bash
-cd backend
-pip install -r requirements.txt
-python main.py
+# WebSocket chat
+python scripts/queue_generation.py \
+  --ws-url wss://<pod-id>-8000.proxy.runpod.net \
+  --type chat \
+  --text "Hello!"
 ```
 
-### 3. Run Workflows
+## Troubleshooting
+
+### Services Not Starting
 
 ```bash
-# Queue a generation
-python scripts/queue_generation.py --prompt "A friendly smile" --webcam-input
+# Check logs
+tail -f /workspace/logs/comfyui.log
+tail -f /workspace/logs/backend.log
+
+# Restart services
+bash /workspace/start_ai_girlfriend.sh
 ```
 
-## Hardware Requirements
+### Out of Memory
 
-### Minimum (Development)
-- GPU: RTX 3090 (24GB VRAM)
-- RAM: 32GB
-- Storage: 100GB SSD
+- Stop other processes
+- Use smaller models (Flux schnell instead of dev)
+- Reduce workflow resolution
 
-### Recommended (Production)
-- GPU: RTX 4090 (24GB VRAM) or A100 (40GB)
-- RAM: 64GB
-- Storage: 200GB NVMe SSD
+### Can't Access Services
 
-## Model Downloads
+- Verify ports are exposed in RunPod template
+- Use the proxy URL, not direct IP:port
+- Check pod is running (not stopped)
 
-See `models/download_models.sh` for automated model fetching:
-- Flux 1.1 (dev/schnell)
-- Wan 2.2 I2V
-- IP-Adapter models
-- LoRA weights
-- CosyVoice3 / Dia TTS
-- SadTalker checkpoints
+## Cost
+
+- RTX 4090: ~$0.44-0.69/hour
+- Pod storage (150GB): Included in disk size
 
 ## License
 
-MIT License - See LICENSE file
+MIT License

@@ -1,6 +1,6 @@
 #!/bin/bash
-# One-click setup script for RunPod deployment
-# Run this inside your RunPod pod
+# AI Girlfriend - One-Click Setup for RunPod (No Network Volume Required)
+# All data is stored in /workspace (container disk)
 
 set -e
 
@@ -12,86 +12,107 @@ echo "=========================================="
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m'
 
-# Configuration
-PROJECT_DIR="/runpod-volume/ai-girlfriend-comfyui"
-MODELS_DIR="/runpod-volume/models"
-COMFYUI_DIR="/workspace/ComfyUI"
+# Configuration - Using /workspace (container disk) instead of network volume
+WORKSPACE="/workspace"
+PROJECT_DIR="$WORKSPACE/ai-girlfriend-comfyui"
+MODELS_DIR="$WORKSPACE/models"
+COMFYUI_DIR="$WORKSPACE/ComfyUI"
+LOG_DIR="$WORKSPACE/logs"
 
-# Check if running on RunPod
-if [ ! -d "/runpod-volume" ]; then
-    echo -e "${RED}Error: /runpod-volume not found${NC}"
-    echo "Are you running this on RunPod?"
+# ========================================
+# 1. Check Environment
+# ========================================
+echo ""
+echo -e "${BLUE}Step 1: Checking environment...${NC}"
+
+# Check GPU
+if command -v nvidia-smi &> /dev/null; then
+    GPU=$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)
+    VRAM=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader | head -1)
+    echo -e "  ${GREEN}✓${NC} GPU: $GPU ($VRAM)"
+else
+    echo -e "  ${RED}✗${NC} No GPU detected"
     exit 1
 fi
 
-echo -e "${GREEN}✓ Running on RunPod${NC}"
+# Check disk space
+DISK=$(df -h "$WORKSPACE" | tail -1 | awk '{print $4}')
+echo -e "  ${GREEN}✓${NC} Available disk: $DISK"
 
-# Check GPU
+# ========================================
+# 2. Install System Dependencies
+# ========================================
 echo ""
-echo "Checking GPU..."
-if command -v nvidia-smi &> /dev/null; then
-    nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
-else
-    echo -e "${RED}Warning: nvidia-smi not found${NC}"
-fi
+echo -e "${BLUE}Step 2: Installing system dependencies...${NC}"
 
-# Step 1: Install system dependencies
-echo ""
-echo "Step 1: Installing system dependencies..."
 apt-get update -qq
-apt-get install -y -qq git wget curl vim libgl1-mesa-glx libglib2.0-0
+apt-get install -y -qq git wget curl vim libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev
 
-# Step 2: Setup directories
+echo -e "  ${GREEN}✓${NC} System dependencies installed"
+
+# ========================================
+# 3. Create Directories
+# ========================================
 echo ""
-echo "Step 2: Setting up directories..."
+echo -e "${BLUE}Step 3: Creating directories...${NC}"
+
 mkdir -p "$MODELS_DIR"/{checkpoints,clip,vae,loras,ipadapter,sadtalker,embeddings,controlnet}
-mkdir -p /runpod-volume/outputs
-mkdir -p /runpod-volume/data
+mkdir -p "$WORKSPACE/outputs"
+mkdir -p "$WORKSPACE/data"
+mkdir -p "$LOG_DIR"
 
-# Step 3: Install Python dependencies
+echo -e "  ${GREEN}✓${NC} Directories created at $WORKSPACE"
+
+# ========================================
+# 4. Clone Project
+# ========================================
 echo ""
-echo "Step 3: Installing Python dependencies..."
-pip install -q --upgrade pip
+echo -e "${BLUE}Step 4: Cloning project...${NC}"
 
-# Install PyTorch with CUDA
-pip install -q torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu121
+cd "$WORKSPACE"
 
-# Install Triton for WaveSpeed
-pip install -q triton
-
-# Step 4: Clone ComfyUI
-echo ""
-echo "Step 4: Setting up ComfyUI..."
-if [ ! -d "$COMFYUI_DIR" ]; then
-    git clone --depth 1 https://github.com/comfyanonymous/ComfyUI.git "$COMFYUI_DIR"
-    cd "$COMFYUI_DIR"
-    pip install -q -r requirements.txt
+if [ ! -d "$PROJECT_DIR" ]; then
+    git clone https://github.com/dobrinsm/ai-girlfriend-comfyui.git "$PROJECT_DIR"
+    echo -e "  ${GREEN}✓${NC} Project cloned"
 else
-    echo "ComfyUI already exists, updating..."
-    cd "$COMFYUI_DIR"
+    echo -e "  ${YELLOW}!${NC} Project already exists, pulling updates..."
+    cd "$PROJECT_DIR"
     git pull
 fi
 
-# Step 5: Install custom nodes
+# ========================================
+# 5. Setup ComfyUI
+# ========================================
 echo ""
-echo "Step 5: Installing custom nodes..."
+echo -e "${BLUE}Step 5: Setting up ComfyUI...${NC}"
+
+if [ ! -d "$COMFYUI_DIR" ]; then
+    git clone --depth 1 https://github.com/comfyanonymous/ComfyUI.git "$COMFYUI_DIR"
+    echo -e "  ${GREEN}✓${NC} ComfyUI cloned"
+else
+    echo -e "  ${YELLOW}!${NC} ComfyUI already exists"
+fi
+
+cd "$COMFYUI_DIR"
+pip install -q -r requirements.txt
+
+# Install custom nodes
+echo "  Installing custom nodes..."
 cd "$COMFYUI_DIR/custom_nodes"
 
 install_node() {
     local repo=$1
     local name=$(basename "$repo" .git)
-
+    
     if [ ! -d "$name" ]; then
-        echo "  Installing $name..."
+        echo "    - $name"
         git clone --depth 1 "$repo" "$name"
         if [ -f "$name/requirements.txt" ]; then
             pip install -q -r "$name/requirements.txt" || true
         fi
-    else
-        echo "  Updating $name..."
-        cd "$name" && git pull && cd ..
     fi
 }
 
@@ -101,70 +122,31 @@ install_node "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite.git"
 install_node "https://github.com/cubiq/ComfyUI_IPAdapter_plus.git"
 install_node "https://github.com/OpenTalker/SadTalker.git"
 
-# Step 6: Create symlinks for models
-echo ""
-echo "Step 6: Creating model symlinks..."
+# Create symlinks for models
 cd "$COMFYUI_DIR/models"
-
-for dir in checkpoints clip vae loras ipadapter sadtalker; do
-    if [ -d "$MODELS_DIR/$dir" ]; then
-        # Backup existing directory
-        if [ -d "$dir" ] && [ ! -L "$dir" ]; then
-            mv "$dir" "${dir}_backup_$(date +%s)"
-        fi
-        # Create symlink
-        if [ ! -L "$dir" ]; then
-            ln -sf "$MODELS_DIR/$dir" "$dir"
-            echo "  Linked $dir"
-        fi
+for dir in checkpoints clip vae loras ipadapter sadtalker embeddings controlnet; do
+    if [ -d "$MODELS_DIR/$dir" ] && [ ! -L "$dir" ]; then
+        rm -rf "${dir}_backup" 2>/dev/null || true
+        mv "$dir" "${dir}_backup" 2>/dev/null || true
+        ln -sf "$MODELS_DIR/$dir" "$dir"
+    elif [ ! -L "$dir" ]; then
+        ln -sf "$MODELS_DIR/$dir" "$dir"
     fi
 done
 
-# Step 7: Setup project files
+echo -e "  ${GREEN}✓${NC} ComfyUI setup complete"
+
+# ========================================
+# 6. Install Backend Dependencies
+# ========================================
 echo ""
-echo "Step 7: Setting up project files..."
-if [ ! -d "$PROJECT_DIR" ]; then
-    mkdir -p "$PROJECT_DIR"
-    echo "  Created project directory"
-fi
+echo -e "${BLUE}Step 6: Installing backend dependencies...${NC}"
 
-# Create a minimal backend setup
-cd "$PROJECT_DIR"
-mkdir -p backend workflows configs scripts
+cd "$PROJECT_DIR/backend"
+pip install -q -r requirements.txt
 
-# BUG FIX #9: Use the full requirements.txt that matches backend/requirements.txt.
-# The previous version omitted torch, opencv, transformers, qwen-vl-utils etc.
-# which caused VLMProcessor and TTSProcessor imports to fail.
-cat > backend/requirements.txt << 'EOF'
-fastapi==0.115.0
-uvicorn[standard]==0.32.0
-websockets==13.1
-pydantic==2.9.2
-pydantic-settings==2.6.1
-httpx==0.27.2
-aiofiles==24.1.0
-python-multipart==0.0.17
-pillow==11.0.0
-numpy==1.26.4
-opencv-python==4.10.0.84
-sqlalchemy==2.0.36
-aiosqlite==0.20.0
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-redis==5.2.0
-celery==5.4.0
-ollama==0.4.2
-qwen-vl-utils==0.0.8
-transformers>=4.45.0
-accelerate>=0.26.0
-torch==2.5.1
-torchvision==0.20.1
-torchaudio==2.5.1
---extra-index-url https://download.pytorch.org/whl/cu121
-EOF
-
-# Create .env for backend
-cat > backend/.env << EOF
+# Create .env file
+cat > "$PROJECT_DIR/backend/.env" << EOF
 DEBUG=false
 LOG_LEVEL=INFO
 HOST=0.0.0.0
@@ -172,14 +154,14 @@ PORT=8000
 COMFYUI_URL=http://localhost:8188
 COMFYUI_WS_URL=ws://localhost:8188/ws
 WORKFLOW_DIR=$PROJECT_DIR/workflows
-OUTPUT_DIR=/runpod-volume/outputs
-# Enhancement: Ollama runs locally on RunPod (not in Docker), so localhost is correct here
+OUTPUT_DIR=$WORKSPACE/outputs
 OLLAMA_HOST=http://localhost:11434
+COSYVOICE_SERVER=http://localhost:50000
 VLM_MODEL=qwen2-vl-7b
 LLM_MODEL=llama3.2:7b
 TTS_MODEL=cosyvoice3
 TTS_VOICE_ID=friendly_female
-MEMORY_DB_PATH=/runpod-volume/data/memory.db
+MEMORY_DB_PATH=$WORKSPACE/data/memory.db
 MAX_MEMORY_ITEMS=50
 DEFAULT_CFG=3.5
 DEFAULT_STEPS=6
@@ -189,48 +171,66 @@ MAX_CONCURRENT_GENERATIONS=2
 REQUEST_TIMEOUT=300
 EOF
 
-# Install backend dependencies
-pip install -q -r backend/requirements.txt
+echo -e "  ${GREEN}✓${NC} Backend setup complete"
 
-# Step 8: Create startup script
+# ========================================
+# 7. Download Models
+# ========================================
 echo ""
-echo "Step 8: Creating startup script..."
-cat > /runpod-volume/start_all.sh << 'EOF'
+echo -e "${BLUE}Step 7: Downloading models...${NC}"
+echo -e "  ${YELLOW}This may take 30-60 minutes depending on your connection${NC}"
+
+cd "$PROJECT_DIR"
+python scripts/download_models.py --all
+
+echo -e "  ${GREEN}✓${NC} Models downloaded"
+
+# ========================================
+# 8. Create Startup Script
+# ========================================
+echo ""
+echo -e "${BLUE}Step 8: Creating startup script...${NC}"
+
+cat > "$WORKSPACE/start_ai_girlfriend.sh" << 'SCRIPT'
 #!/bin/bash
+# AI Girlfriend - Start All Services
 
-echo "=========================================="
-echo "Starting AI Girlfriend Services"
-echo "=========================================="
+WORKSPACE="/workspace"
+PROJECT_DIR="$WORKSPACE/ai-girlfriend-comfyui"
+LOG_DIR="$WORKSPACE/logs"
 
-# Function to check if process is running
+# Colors
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
 is_running() {
     pgrep -f "$1" > /dev/null 2>&1
 }
 
-# Start ComfyUI
-echo "Starting ComfyUI..."
+echo "Starting AI Girlfriend services..."
+
+# ComfyUI
 if ! is_running "ComfyUI/main.py"; then
-    cd /workspace/ComfyUI
-    python main.py --listen 0.0.0.0 --port 8188 --preview-method auto > /runpod-volume/logs/comfyui.log 2>&1 &
-    echo "  ComfyUI starting on port 8188..."
-    sleep 10
+    echo "  Starting ComfyUI..."
+    cd "$WORKSPACE/ComfyUI"
+    nohup python main.py --listen 0.0.0.0 --port 8188 --preview-method auto > "$LOG_DIR/comfyui.log" 2>&1 &
+    sleep 15
 else
-    echo "  ComfyUI already running"
+    echo -e "  ${YELLOW}ComfyUI already running${NC}"
 fi
 
-# Start Backend
-echo "Starting Backend API..."
-if ! is_running "ai-girlfriend-comfyui/backend/main.py"; then
-    cd /runpod-volume/ai-girlfriend-comfyui/backend
-    python main.py > /runpod-volume/logs/backend.log 2>&1 &
-    echo "  Backend starting on port 8000..."
-    sleep 5
-else
-    echo "  Backend already running"
-fi
+# Wait for ComfyUI
+echo "  Waiting for ComfyUI..."
+for i in {1..30}; do
+    if curl -sf http://localhost:8188/system_stats > /dev/null 2>&1; then
+        echo -e "  ${GREEN}✓ ComfyUI ready${NC}"
+        break
+    fi
+    sleep 2
+done
 
-# Check Ollama
-echo "Checking Ollama..."
+# Ollama
 if ! command -v ollama &> /dev/null; then
     echo "  Installing Ollama..."
     curl -fsSL https://ollama.com/install.sh | sh
@@ -238,123 +238,93 @@ fi
 
 if ! is_running "ollama serve"; then
     echo "  Starting Ollama..."
-    ollama serve > /runpod-volume/logs/ollama.log 2>&1 &
+    nohup ollama serve > "$LOG_DIR/ollama.log" 2>&1 &
     sleep 5
-
-    # Pull model if not exists
+    
     if ! ollama list | grep -q "llama3.2"; then
-        echo "  Pulling llama3.2:7b model..."
+        echo "  Pulling llama3.2:7b (this may take a few minutes)..."
         ollama pull llama3.2:7b
     fi
 else
-    echo "  Ollama already running"
+    echo -e "  ${YELLOW}Ollama already running${NC}"
+fi
+
+# Frontend
+if ! is_running "frontend/serve.py"; then
+    echo "  Starting Frontend..."
+    cd "$PROJECT_DIR/frontend"
+    nohup python serve.py > "$LOG_DIR/frontend.log" 2>&1 &
+    sleep 2
+else
+    echo -e "  ${YELLOW}Frontend already running${NC}"
+fi
+
+# Backend
+if ! is_running "uvicorn.*main:app"; then
+    echo "  Starting Backend API..."
+    cd "$PROJECT_DIR/backend"
+    nohup python main.py > "$LOG_DIR/backend.log" 2>&1 &
+    sleep 5
+else
+    echo -e "  ${YELLOW}Backend already running${NC}"
 fi
 
 echo ""
 echo "=========================================="
-echo "Services Status:"
+echo -e "${GREEN}Services Status:${NC}"
 echo "=========================================="
-echo "ComfyUI (local):  http://localhost:8188"
-echo "Backend (local):  http://localhost:8000"
-echo "API Docs (local): http://localhost:8000/docs"
+echo -n "ComfyUI (8188):  "
+curl -sf http://localhost:8188/system_stats > /dev/null 2>&1 && echo -e "${GREEN}✓ Running${NC}" || echo -e "${RED}✗ Not running${NC}"
+echo -n "Ollama (11434):  "
+curl -sf http://localhost:11434/api/tags > /dev/null 2>&1 && echo -e "${GREEN}✓ Running${NC}" || echo -e "${RED}✗ Not running${NC}"
+echo -n "Frontend (3000):  "
+curl -sf http://localhost:3000 > /dev/null 2>&1 && echo -e "${GREEN}✓ Running${NC}" || echo -e "${YELLOW}! Starting${NC}"
+echo -n "Backend (8000):   "
+curl -sf http://localhost:8000/health > /dev/null 2>&1 && echo -e "${GREEN}✓ Running${NC}" || echo -e "${RED}✗ Not running${NC}"
 echo ""
-echo "Access externally via RunPod proxy:"
-echo "  https://<pod-id>-8188.proxy.runpod.net  (ComfyUI)"
-echo "  https://<pod-id>-8000.proxy.runpod.net  (Backend)"
-echo "  Find your Pod ID in the RunPod console under 'Connect'"
+echo "Access via RunPod Proxy:"
+echo "  - Frontend:   https://<pod-id>-3000.proxy.runpod.net"
+echo "  - ComfyUI:   https://<pod-id>-8188.proxy.runpod.net"
+echo "  - Backend:   https://<pod-id>-8000.proxy.runpod.net"
+echo ""
+echo "Find your Pod ID in RunPod Console → Connect"
 echo "=========================================="
+SCRIPT
+
+chmod +x "$WORKSPACE/start_ai_girlfriend.sh"
+
+echo -e "  ${GREEN}✓${NC} Startup script created"
+
+# ========================================
+# 9. Start Services
+# ========================================
 echo ""
-echo "To view logs:"
-echo "  ComfyUI: tail -f /runpod-volume/logs/comfyui.log"
-echo "  Backend: tail -f /runpod-volume/logs/backend.log"
-echo "  Ollama:  tail -f /runpod-volume/logs/ollama.log"
-EOF
+echo -e "${BLUE}Step 9: Starting services...${NC}"
 
-chmod +x /runpod-volume/start_all.sh
-mkdir -p /runpod-volume/logs
+bash "$WORKSPACE/start_ai_girlfriend.sh"
 
-# Step 9: Create model download script
-echo ""
-echo "Step 9: Creating model download script..."
-cat > /runpod-volume/download_models.sh << 'EOF'
-#!/bin/bash
-
-MODELS_DIR="/runpod-volume/models"
-
-echo "Downloading AI Girlfriend Models..."
-echo "This may take 30-60 minutes depending on your connection."
-echo ""
-
-# Function to download with progress
-download_model() {
-    local url=$1
-    local dest=$2
-    local name=$(basename "$dest")
-
-    if [ -f "$dest" ]; then
-        echo "  ✓ $name already exists"
-        return
-    fi
-
-    echo "  ↓ Downloading $name..."
-    wget -q --show-progress -O "$dest" "$url" || echo "  ✗ Failed to download $name"
-}
-
-# Create directories
-mkdir -p "$MODELS_DIR"/{checkpoints,clip,vae,ipadapter}
-
-echo "Downloading Flux models..."
-download_model \
-    "https://huggingface.co/Kijai/flux-fp8/resolve/main/flux1-dev-fp8.safetensors" \
-    "$MODELS_DIR/checkpoints/flux1-dev-fp8.safetensors"
-
-echo "Downloading text encoders..."
-download_model \
-    "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors" \
-    "$MODELS_DIR/clip/clip_l.safetensors"
-
-download_model \
-    "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp8_e4m3fn.safetensors" \
-    "$MODELS_DIR/clip/t5xxl_fp8_e4m3fn.safetensors"
-
-echo "Downloading VAE..."
-download_model \
-    "https://huggingface.co/black-forest-labs/FLUX.1-schnell/resolve/main/ae.safetensors" \
-    "$MODELS_DIR/vae/ae.safetensors"
-
-echo ""
-echo "Essential models downloaded!"
-echo "Optional: Download Wan 2.2 models for video generation:"
-echo "  - https://huggingface.co/Wan-AI/Wan2.1-I2V-14B-720P"
-echo ""
-echo "Models location: $MODELS_DIR"
-ls -lh "$MODELS_DIR/checkpoints/"
-EOF
-
-chmod +x /runpod-volume/download_models.sh
-
+# ========================================
 # Summary
+# ========================================
 echo ""
 echo "=========================================="
 echo -e "${GREEN}Setup Complete!${NC}"
 echo "=========================================="
 echo ""
-echo "Next steps:"
-echo ""
-echo "1. Download models:"
-echo "   /runpod-volume/download_models.sh"
-echo ""
-echo "2. Start all services:"
-echo "   /runpod-volume/start_all.sh"
-echo ""
-echo "3. Access your services via RunPod proxy:"
-echo "   - ComfyUI: https://<pod-id>-8188.proxy.runpod.net"
-echo "   - Backend: https://<pod-id>-8000.proxy.runpod.net"
-echo ""
-echo "4. Find your Pod ID in the RunPod console under 'Connect'"
-echo ""
 echo "Project location: $PROJECT_DIR"
 echo "Models location: $MODELS_DIR"
-echo "Logs location: /runpod-volume/logs"
+echo "Logs location: $LOG_DIR"
 echo ""
+echo "To restart services:"
+echo "  bash $WORKSPACE/start_ai_girlfriend.sh"
+echo ""
+echo "To view logs:"
+echo "  tail -f $LOG_DIR/comfyui.log"
+echo "  tail -f $LOG_DIR/backend.log"
+echo ""
+echo "Access via RunPod proxy:"
+echo "  - ComfyUI:   https://<pod-id>-8188.proxy.runpod.net"
+echo "  - Backend:   https://<pod-id>-8000.proxy.runpod.net"
+echo ""
+echo "Find your Pod ID in RunPod Console → Connect"
 echo "=========================================="

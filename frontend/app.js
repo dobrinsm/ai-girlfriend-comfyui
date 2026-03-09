@@ -3,12 +3,29 @@
  * Connects to backend WebSocket for real-time avatar chat
  */
 
-// Configuration
-// UPDATE THESE TO POINT TO YOUR RUNPOD SERVER
+// Configuration - Auto-detect backend URL from current location
+// Usage: index.html?backend=https://pod-id-8000.proxy.runpod.net
+function getBackendURL() {
+    const params = new URLSearchParams(window.location.search);
+    const backendParam = params.get('backend');
+    if (backendParam) {
+        return backendParam.replace(/\/$/, ''); // Remove trailing slash
+    }
+    // Default: assume backend is on same host but port 8000
+    const host = window.location.hostname;
+    // Check if we're on the RunPod proxy
+    if (host.includes('.proxy.runpod.net')) {
+        // Replace -3000 port with -8000 for backend
+        return host.replace('-3000', '-8000').replace(':3000', ':8000');
+    }
+    // Local development
+    return window.location.protocol + '//' + host.replace(':3000', ':8000');
+}
+
 const CONFIG = {
-    // RunPod IP and port - update this to your actual RunPod IP
-    WS_URL: 'ws://209.170.80.132:8000/ws/chat',
-    API_URL: 'http://209.170.80.132:8000',
+    // Use backend URL from query param or auto-detect
+    API_URL: getBackendURL(),
+    WS_URL: getBackendURL().replace('http', 'ws') + '/ws/chat',
     
     USER_ID: 'user_' + Math.random().toString(36).substr(2, 9)
 };
