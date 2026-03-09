@@ -1,0 +1,26 @@
+{
+  "name": "AI Girlfriend Complete Pipeline",
+  "description": "Full pipeline: Image Gen → Video Gen → Lip Sync",
+  "stages": {
+    "1_image_generation": {
+      "workflow_file": "../image-gen/flux_api.json",
+      "input_params": {
+        "prompt": "beautiful female avatar, friendly smile, natural lighting, high quality"
+      }
+    },
+    "2_video_generation": {
+      "workflow_file": "../video-gen/wan22_i2v_api.json",
+      "input_params": {
+        "source_image": "from_stage_1"
+      }
+    },
+    "3_lipsync": {
+      "workflow_file": "../voice-lipsync/cosyvoice_sadtalker_api.json",
+      "input_params": {
+        "source_image": "from_stage_2",
+        "text": "Hello! How are you today?"
+      }
+    }
+  },
+  "notes": "This pipeline combines Flux image generation, Wan2.2 I2V video generation, and CosyVoice+SadTalker lip sync. Each stage can be run independently or as a complete pipeline."
+}

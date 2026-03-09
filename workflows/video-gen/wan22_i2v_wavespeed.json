@@ -16,7 +16,7 @@
         {"name": "CLIP", "type": "CLIP", "links": []},
         {"name": "VAE", "type": "VAE", "links": [2]}
       ],
-      "widgets_values": ["wan2.2_i2v_720p_fp8.safetensors"]
+      "widgets_values": ["wan21_i2v_720p_fp8_bf16.safetensors"]
     },
     {
       "id": 2,

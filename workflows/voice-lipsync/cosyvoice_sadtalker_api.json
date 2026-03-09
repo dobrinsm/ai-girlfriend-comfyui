@@ -1,0 +1,45 @@
+{
+  "1": {
+    "inputs": {
+      "text": "Hello! I'm so happy to see you. How has your day been?",
+      "voice": "friendly_female_voice",
+      "speed": 1.0,
+      "temperature": 0.5,
+      "sample_rate": 24000
+    },
+    "class_type": "CosyVoice3_TTS",
+    "_meta": {"title": "CosyVoice TTS"}
+  },
+  "4": {
+    "inputs": {"image": "avatar_input.png"},
+    "class_type": "LoadImage"
+  },
+  "5": {
+    "inputs": {
+      "source_image": ["4", 0],
+      "audio": ["1", 0],
+      "processing": "full",
+      "facee": "crop",
+      "enhancer": false,
+      "mask": false,
+      "preprocess": true,
+      "size": 512,
+      "style": "facevid2vid",
+      "pose_scale": 3
+    },
+    "class_type": "SadTalker",
+    "_meta": {"title": "SadTalker Lip Sync"}
+  },
+  "6": {
+    "inputs": {
+      "images": ["5", 0],
+      "format": "video/h264-mp4",
+      "fps": 25,
+      "lossless": false,
+      "quality": 75,
+      "save_metadata": true
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {"title": "Combine to Video"}
+  }
+}

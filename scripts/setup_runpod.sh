@@ -59,7 +59,7 @@ echo -e "  ${GREEN}✓${NC} System dependencies installed"
 echo ""
 echo -e "${BLUE}Step 3: Creating directories...${NC}"
 
-mkdir -p "$MODELS_DIR"/{checkpoints,clip,vae,loras,ipadapter,sadtalker,embeddings,controlnet}
+mkdir -p "$MODELS_DIR"/{checkpoints,clip,vae,loras,ipadapter,sadtalker,embeddings,controlnet,unet,text_encoders}
 mkdir -p "$WORKSPACE/outputs"
 mkdir -p "$WORKSPACE/data"
 mkdir -p "$LOG_DIR"
@@ -124,7 +124,7 @@ install_node "https://github.com/OpenTalker/SadTalker.git"
 
 # Create symlinks for models
 cd "$COMFYUI_DIR/models"
-for dir in checkpoints clip vae loras ipadapter sadtalker embeddings controlnet; do
+for dir in checkpoints clip vae loras ipadapter sadtalker embeddings controlnet unet text_encoders; do
     if [ -d "$MODELS_DIR/$dir" ] && [ ! -L "$dir" ]; then
         rm -rf "${dir}_backup" 2>/dev/null || true
         mv "$dir" "${dir}_backup" 2>/dev/null || true
@@ -158,7 +158,7 @@ OUTPUT_DIR=$WORKSPACE/outputs
 OLLAMA_HOST=http://localhost:11434
 COSYVOICE_SERVER=http://localhost:50000
 VLM_MODEL=qwen2-vl-7b
-LLM_MODEL=llama3.2:7b
+LLM_MODEL=mistral
 TTS_MODEL=cosyvoice3
 TTS_VOICE_ID=friendly_female
 MEMORY_DB_PATH=$WORKSPACE/data/memory.db
@@ -241,13 +241,17 @@ if ! is_running "ollama serve"; then
     nohup ollama serve > "$LOG_DIR/ollama.log" 2>&1 &
     sleep 5
     
-    if ! ollama list | grep -q "llama3.2"; then
-        echo "  Pulling LLM model..."
-        # Try different models in order of preference
-        ollama pull llama3.2:7b 2>/dev/null || \
-        ollama pull llama3.2 2>/dev/null || \
+    if ! ollama list | grep -q "mistral"; then
+        echo "  Pulling LLM model (mistral)..."
         ollama pull mistral 2>/dev/null || \
-        echo "  Warning: Could not pull LLM model - will use backend defaults"
+        echo "  Warning: Could not pull mistral - will use backend defaults"
+    fi
+    
+    # Pull VLM model for webcam analysis
+    if ! ollama list | grep -q "qwen2-vl"; then
+        echo "  Pulling VLM model (qwen2-vl:7b)..."
+        ollama pull qwen2-vl:7b 2>/dev/null || \
+        echo "  Warning: Could not pull qwen2-vl:7b - webcam analysis may not work"
     fi
 else
     echo -e "  ${YELLOW}Ollama already running${NC}"

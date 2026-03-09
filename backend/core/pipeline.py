@@ -28,7 +28,7 @@ class PipelineManager:
         vlm_processor: VLMProcessor,
         tts_processor: TTSProcessor,
         workflow_dir: str,
-        llm_model: str = "llama3.2:7b"
+        llm_model: str = "mistral"
     ):
         self.comfy = comfy_client
         self.memory = memory_manager

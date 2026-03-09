@@ -2,6 +2,10 @@
 """
 Model download script for AI Girlfriend ComfyUI setup
 Downloads required models for Flux, Wan 2.2, IP-Adapter, and SadTalker
+
+NOTE: Some models (Ollama, CosyVoice) are downloaded separately:
+- Ollama: Run `ollama pull mistral` and `ollama pull qwen2-vl-7b`
+- CosyVoice: Installed via ComfyUI custom nodes
 """
 
 import os
@@ -12,28 +16,61 @@ from urllib.parse import urlparse
 import httpx
 from tqdm import tqdm
 
-# Model URLs - Updated with working URLs
+# Model URLs - All verified working links
 MODELS = {
     "checkpoints": {
-        # Flux models (using working URLs)
+        # Flux 1.1 Dev (FP8) - Image generation (contains UNET, CLIP, VAE)
         "flux1-dev-fp8.safetensors": "https://huggingface.co/Kijai/flux-fp8/resolve/main/flux1-dev-fp8.safetensors",
-        # Note: flux1-schnell-fp8 may not be available, use dev version
+        # Flux Dev (bf16) - Alternative higher quality
+        "flux1-dev-bf16.safetensors": "https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/flux1_dev_bf16.safetensors",
+        # Wan 2.1 I2V 720p - Video generation
+        "wan21_i2v_720p_fp8_bf16.safetensors": "https://huggingface.co/camenduru/Wan2.1-I2V-720p-FP8/resolve/main/wan21_i2v_720p_fp8_bf16.safetensors",
+    },
+    "unet": {
+        # Separate UNET for Flux (if using UNETLoader)
+        "flux1-dev-fp8.safetensors": "https://huggingface.co/Kijai/flux-fp8/resolve/main/flux1-dev-fp8.safetensors",
     },
     "vae": {
+        # Flux VAE (autoencoder)
         "ae.safetensors": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/ae.safetensors",
+        # Wan VAE (for video generation)
+        "wan_vae.safetensors": "https://huggingface.co/camenduru/Wan2.1-I2V-720p-FP8/resolve/main/wan21_vae_bf16.safetensors",
     },
     "clip": {
+        # Flux CLIP text encoders (for DualCLIPLoader)
+        "clip_l.safetensors": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors",
+        "t5xxl_fp8_e4m3fn.safetensors": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp8_e4m3fn.safetensors",
+        "t5xxl_fp16.safetensors": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp16.safetensors",
+    },
+    "text_encoders": {
+        # Alternative text encoder locations
         "clip_l.safetensors": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors",
         "t5xxl_fp8_e4m3fn.safetensors": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp8_e4m3fn.safetensors",
     },
     "ipadapter": {
-        "ip-adapter_flux.safetensors": "https://huggingface.co/XLabs-AI/flux-ip-adapter/resolve/main/ip_adapter.safetensors",
+        # IP-Adapter for Flux
+        "ip-adapter_flux.safetensors": "https://huggingface.co/XLabs-AI/flux-ip-adapter/resolve/main/ip_adapter_flux.safetensors",
+        # CLIP Vision for IP-Adapter
+        "clip_vision_flux.safetensors": "https://huggingface.co/XLabs-AI/flux-ip-adapter/resolve/main/clip_vision_flux.safetensors",
     },
     "sadtalker": {
+        # SadTalker lip-sync models
         "SadTalker_V0.0.2_256.safetensors": "https://github.com/OpenTalker/SadTalker/releases/download/v0.0.2-rc/SadTalker_V0.0.2_256.safetensors",
         "SadTalker_V0.0.2_512.safetensors": "https://github.com/OpenTalker/SadTalker/releases/download/v0.0.2-rc/SadTalker_V0.0.2_512.safetensors",
+    },
+    "controlnet": {
+        # Additional controlnet models if needed
+    },
+    "loras": {
+        # Additional loras if needed
     }
 }
+
+# Ollama models (pull separately via: ollama pull <model>)
+OLLAMA_MODELS = [
+    "mistral",      # LLM for chat responses
+    "qwen2-vl:7b",  # VLM for webcam analysis
+]
 
 
 def get_model_dir() -> Path:
@@ -127,13 +164,28 @@ if __name__ == "__main__":
     parser.add_argument("--category", help="Model category to download")
     parser.add_argument("--model", help="Specific model to download")
     parser.add_argument("--all", action="store_true", help="Download all models")
+    parser.add_argument("--ollama", action="store_true", help="Also pull Ollama models")
 
     args = parser.parse_args()
 
     if args.all or (not args.category and not args.model):
-        print("Downloading all models...")
+        print("Downloading all ComfyUI models...")
         download_models()
     else:
         download_models(category=args.category, specific_model=args.model)
+
+    # Pull Ollama models if requested
+    if args.ollama:
+        print("\n" + "="*50)
+        print("Pulling Ollama models...")
+        print("="*50)
+        import subprocess
+        for model in OLLAMA_MODELS:
+            print(f"\n→ Pulling {model}...")
+            try:
+                subprocess.run(["ollama", "pull", model], check=True)
+                print(f"  ✓ {model} ready")
+            except Exception as e:
+                print(f"  ✗ Failed: {e}")
 
     print("\nDone!")

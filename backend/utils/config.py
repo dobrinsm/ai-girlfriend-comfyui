@@ -37,7 +37,7 @@ class Settings(BaseSettings):
 
     # Models
     vlm_model: str = Field(default="qwen2-vl-7b", alias="VLM_MODEL")
-    llm_model: str = Field(default="llama3.2:7b", alias="LLM_MODEL")
+    llm_model: str = Field(default="mistral", alias="LLM_MODEL")
     tts_model: str = Field(default="cosyvoice3", alias="TTS_MODEL")
     tts_voice_id: str = Field(default="friendly_female", alias="TTS_VOICE_ID")
 

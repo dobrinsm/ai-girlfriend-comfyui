@@ -5,14 +5,14 @@ A high-performance real-time AI avatar generation system using ComfyUI with Wave
 ## What It Does
 
 ```
-User Message → LLM (Ollama) → Response + Avatar (Flux) → Video (Wan 2.2) → Lip-Sync (SadTalker) + Voice (CosyVoice)
+User Message → LLM (Mistral/Ollama) → Response + Avatar (Flux) → Video (Wan 2.2) → Lip-Sync (SadTalker) + Voice (CosyVoice)
 ```
 
 | Component | Model | Latency |
 |-----------|-------|---------|
-| Chat Response | Llama 3.2 (Ollama) | <1s |
+| Chat Response | Mistral (Ollama) | <1s |
 | Avatar Image | Flux 1.1 FP8 | ~2-3s |
-| Video Generation | Wan 2.2 I2V | ~5-8s |
+| Video Generation | Wan 2.1 I2V | ~5-8s |
 | Voice Synthesis | CosyVoice3 | ~1-2s |
 | Lip Sync | SadTalker | ~1s |
 
@@ -45,6 +45,13 @@ cd ai-girlfriend-comfyui
 bash scripts/setup_runpod.sh
 ```
 
+This will:
+- Install all system dependencies
+- Clone and setup ComfyUI with custom nodes
+- Download all required AI models
+- Pull Ollama models (Mistral + Qwen2-VL)
+- Start all services automatically
+
 ### Step 3: Access Services
 
 Find your Pod ID in RunPod Console → Connect, then use:
@@ -62,11 +69,28 @@ Find your Pod ID in RunPod Console → Connect, then use:
 ## Hardware Requirements
 
 | Spec | Minimum | Recommended |
-|------|---------|------------|
+|------|---------|-------------|
 | GPU | RTX 3090 (24GB) | RTX 4090 (24GB) |
 | VRAM | 20GB | 24GB |
 | Disk | 100GB | 200GB |
 | RAM | 32GB | 64GB |
+
+## Models Downloaded
+
+### ComfyUI Models (Automatic)
+
+| Folder | Models |
+|--------|--------|
+| checkpoints/ | flux1-dev-fp8.safetensors, wan21_i2v_720p_fp8_bf16.safetensors |
+| vae/ | ae.safetensors, wan_vae.safetensors |
+| clip/ | clip_l.safetensors, t5xxl_fp8_e4m3fn.safetensors |
+| ipadapter/ | ip-adapter_flux.safetensors, clip_vision_flux.safetensors |
+| sadtalker/ | SadTalker_V0.0.2_256.safetensors, SadTalker_V0.0.2_512.safetensors |
+
+### Ollama Models (Automatic)
+
+- `mistral` - LLM for chat responses
+- `qwen2-vl:7b` - VLM for webcam analysis
 
 ## Services Started
 
@@ -76,7 +100,6 @@ The setup script automatically starts:
 2. **ComfyUI** (port 8188) - Image/Video generation
 3. **Backend API** (port 8000) - FastAPI orchestration
 4. **Ollama** (port 11434) - LLM for chat
-5. **CosyVoice** (port 50000) - Text-to-Speech
 
 ## Project Structure
 
@@ -88,12 +111,13 @@ ai-girlfriend-comfyui/
 │   └── requirements.txt
 ├── scripts/
 │   ├── setup_runpod.sh  # One-click setup (USE THIS)
-│   └── download_models.py
+│   ├── download_models.py
+│   └── run_workflow.py
 ├── workflows/           # ComfyUI workflows
 │   ├── image-gen/     # Flux workflows
 │   ├── video-gen/     # Wan 2.2 workflows
-│   └── full-pipeline/
-└── configs/            # Configuration
+│   └── voice-lipsync/ # SadTalker workflows
+└── frontend/          # Web UI
 ```
 
 ## Usage
@@ -106,14 +130,39 @@ curl -X POST "https://<pod-id>-8000.proxy.runpod.net/api/v1/generate/avatar" \
   -F "user_id=test_user"
 ```
 
-### Chat
+### Chat via WebSocket
+
+Connect to `wss://<pod-id>-8000.proxy.runpod.net/ws/chat` and send:
+
+```json
+{
+  "type": "chat",
+  "message": "Hello!",
+  "user_id": "user123"
+}
+```
+
+Or use the test script:
 
 ```bash
-# WebSocket chat
 python scripts/queue_generation.py \
   --ws-url wss://<pod-id>-8000.proxy.runpod.net \
   --type chat \
   --text "Hello!"
+```
+
+## Restarting Services
+
+If you need to restart services after setup:
+
+```bash
+bash /workspace/start_ai_girlfriend.sh
+```
+
+View logs:
+```bash
+tail -f /workspace/logs/comfyui.log
+tail -f /workspace/logs/backend.log
 ```
 
 ## Troubleshooting
@@ -140,6 +189,12 @@ bash /workspace/start_ai_girlfriend.sh
 - Verify ports are exposed in RunPod template
 - Use the proxy URL, not direct IP:port
 - Check pod is running (not stopped)
+
+### Model Download Issues
+
+If models fail to download, manually download from:
+- Flux: https://huggingface.co/Kijai/flux-fp8
+- Wan 2.1: https://huggingface.co/camenduru/Wan2.1-I2V-720p-FP8
 
 ## Cost
 
