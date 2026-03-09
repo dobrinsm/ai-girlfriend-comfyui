@@ -33,7 +33,7 @@ User Message → LLM (Mistral/Ollama) → Response + Avatar (Flux) → Video (Wa
 SSH into your pod and run:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dobrinsm/ai-girlfriend-comfyui/main/scripts/setup_runpod.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dobrinsm/ai-girlfriend-comfyui/master/scripts/setup_runpod.sh | bash
 ```
 
 Or if you already have the repo cloned:
