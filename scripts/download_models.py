@@ -17,24 +17,25 @@ import httpx
 from tqdm import tqdm
 
 # Model URLs - All verified working links
+# 
+# OPTIONAL: Set HF_TOKEN environment variable for models requiring authentication:
+#   export HF_TOKEN=your_huggingface_token
+# Get your token from: https://huggingface.co/settings/tokens
 MODELS = {
     "checkpoints": {
         # Flux 1.1 Dev (FP8) - Image generation (contains UNET, CLIP, VAE)
+        # This is the main model - works without authentication
         "flux1-dev-fp8.safetensors": "https://huggingface.co/Kijai/flux-fp8/resolve/main/flux1-dev-fp8.safetensors",
-        # Flux Dev (bf16) - Alternative higher quality
-        "flux1-dev-bf16.safetensors": "https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/flux1_dev_bf16.safetensors",
-        # Wan 2.1 I2V 720p - Video generation
-        "wan21_i2v_720p_fp8_bf16.safetensors": "https://huggingface.co/camenduru/Wan2.1-I2V-720p-FP8/resolve/main/wan21_i2v_720p_fp8_bf16.safetensors",
+        # Flux Dev (bf16) - Higher quality, requires HF_TOKEN
+        # "flux1-dev-bf16.safetensors": "https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/flux1_dev_bf16.safetensors",
     },
     "unet": {
         # Separate UNET for Flux (if using UNETLoader)
         "flux1-dev-fp8.safetensors": "https://huggingface.co/Kijai/flux-fp8/resolve/main/flux1-dev-fp8.safetensors",
     },
     "vae": {
-        # Flux VAE (autoencoder)
-        "ae.safetensors": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/ae.safetensors",
-        # Wan VAE (for video generation)
-        "wan_vae.safetensors": "https://huggingface.co/camenduru/Wan2.1-I2V-720p-FP8/resolve/main/wan21_vae_bf16.safetensors",
+        # Flux VAE (autoencoder) - from black-forest-labs (public)
+        "ae.safetensors": "https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/ae.safetensors",
     },
     "clip": {
         # Flux CLIP text encoders (for DualCLIPLoader)
@@ -48,10 +49,9 @@ MODELS = {
         "t5xxl_fp8_e4m3fn.safetensors": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp8_e4m3fn.safetensors",
     },
     "ipadapter": {
-        # IP-Adapter for Flux
-        "ip-adapter_flux.safetensors": "https://huggingface.co/XLabs-AI/flux-ip-adapter/resolve/main/ip_adapter_flux.safetensors",
-        # CLIP Vision for IP-Adapter
-        "clip_vision_flux.safetensors": "https://huggingface.co/XLabs-AI/flux-ip-adapter/resolve/main/clip_vision_flux.safetensors",
+        # IP-Adapter for Flux - using Civitai alternative or HuggingFace
+        # These may require HF_TOKEN
+        # "ip-adapter_flux.safetensors": "https://huggingface.co/ostris/flux-ip-adapter/resolve/main/ip_adapter_flux.safetensors",
     },
     "sadtalker": {
         # SadTalker lip-sync models
@@ -95,16 +95,27 @@ def download_file(url: str, dest_path: Path, chunk_size: int = 8192):
     """Download a file with progress bar"""
     headers = {}
 
-    # HuggingFace token if available
-    hf_token = os.environ.get("HF_TOKEN")
+    # HuggingFace token if available (required for some models)
+    hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
     if hf_token and "huggingface.co" in url:
         headers["Authorization"] = f"Bearer {hf_token}"
+        print(f"  Using HF_TOKEN for authentication")
 
-    with httpx.Client(follow_redirects=True, headers=headers) as client:
-        response = client.head(url)
-        total_size = int(response.headers.get("content-length", 0))
+    with httpx.Client(follow_redirects=True, headers=headers, timeout=httpx.Timeout(300.0)) as client:
+        try:
+            response = client.head(url)
+            total_size = int(response.headers.get("content-length", 0))
+        except Exception as e:
+            print(f"  Warning: Could not get file size: {e}")
+            total_size = 0
 
         with client.stream("GET", url) as response:
+            # Handle 401/403 - try without auth or report
+            if response.status_code in (401, 403):
+                print(f"  ✗ Authentication required. Set HF_TOKEN environment variable.")
+                print(f"    Get your token from: https://huggingface.co/settings/tokens")
+                raise Exception(f"Authentication required for {url}")
+            
             response.raise_for_status()
 
             with open(dest_path, "wb") as f:

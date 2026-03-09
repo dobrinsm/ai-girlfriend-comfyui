@@ -182,6 +182,9 @@ echo -e "  ${GREEN}✓${NC} Backend setup complete"
 echo ""
 echo -e "${BLUE}Step 7: Downloading models...${NC}"
 echo -e "  ${YELLOW}This may take 30-60 minutes depending on your connection${NC}"
+echo -e "  ${YELLOW}Optional: Set HF_TOKEN for models requiring authentication:${NC}"
+echo -e "  ${YELLOW}  export HF_TOKEN=your_token_here${NC}"
+echo -e "  ${YELLOW}  Get token from: https://huggingface.co/settings/tokens${NC}"
 
 cd "$PROJECT_DIR"
 python scripts/download_models.py --all
